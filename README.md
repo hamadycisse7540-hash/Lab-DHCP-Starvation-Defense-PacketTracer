@@ -13,6 +13,14 @@ Il complète les deux rapports d'attaque :
 > aucun lien avec un réseau réel. L'usurpation de MAC n'est montrée que pour valider la
 > contre-mesure. N'appliquez jamais ces techniques sur un réseau sans autorisation écrite.
 
+## Ce lab en 3 volets
+
+Ce laboratoire DHCP Starvation est publié en trois dépôts complémentaires :
+
+1. Attaque, serveur DHCP **VyOS** sous VirtualBox : [Lab-DHCP-Starvation](https://github.com/hamadycisse7540-hash/Lab-DHCP-Starvation)
+2. Attaque, **routeur Cisco** sous GNS3 : [Lab-DHCP-Starvation-Cisco-GNS3](https://github.com/hamadycisse7540-hash/Lab-DHCP-Starvation-Cisco-GNS3)
+3. Défense, **DHCP snooping et port-security** sous Packet Tracer : [Lab-DHCP-Starvation-Defense-PacketTracer](https://github.com/hamadycisse7540-hash/Lab-DHCP-Starvation-Defense-PacketTracer) **(ce dépôt)**
+
 ## Environnement
 
 | Équipement | Rôle | IP | Raccordement |

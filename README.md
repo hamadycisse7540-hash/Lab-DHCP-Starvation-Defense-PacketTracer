@@ -55,9 +55,23 @@ clients non approuvés.
 ├── signature.tex                                 # Bloc signature (auteur + empreinte GPG)
 ├── HAMADY_CISSE_public_key.asc                   # Clé publique GPG de l'auteur
 ├── images/                                       # Captures d'écran du lab
+├── maquette/
+│   └── Lab_Defense_DHCP.pkt                       # Projet Cisco Packet Tracer (maquette)
 ├── LICENSE
 └── README.md
 ```
+
+## Ouvrir la maquette
+
+Le fichier `maquette/Lab_Defense_DHCP.pkt` est le projet **Cisco Packet Tracer** (version
+9.0.1) utilisé pour ce lab. Il s'ouvre avec Packet Tracer (gratuit, compte NetAcad). La
+maquette est fournie en état sain, la défense déjà configurée sur le switch : le routeur
+distribue le DHCP, les deux PC ont une adresse, le DHCP snooping et la port-security sont en
+place.
+
+Pour rejouer la démonstration, suivez la **Tâche 3** du rapport : donnez une fausse adresse MAC
+à `PC1` (onglet *Config*, interface `FastEthernet0`), relancez un `ping` vers `192.168.6.1`, et
+observez le port `Fa0/3` basculer en `err-disabled`.
 
 ## Compilation
 

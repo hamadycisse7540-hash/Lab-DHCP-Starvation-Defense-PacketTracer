@@ -1,0 +1,454 @@
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------------------------------------------
+%  Rapport de Lab Cyber -- Mentorat Cybersecurite / FORCE N
+%  Lab : Defense contre la DHCP Starvation (DHCP Snooping + Port-Security)
+%        Demonstration sous Cisco Packet Tracer
+% ------------------------------------------------------------------
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tcolorbox}
+\usepackage[hidelinks]{hyperref}
+
+% ----- Couleurs de la charte -----
+\definecolor{forceblue}{HTML}{1E70BF}
+\definecolor{forcegreen}{HTML}{3AAA35}
+\definecolor{boxbg}{HTML}{F4F4F4}
+\definecolor{warnred}{HTML}{C0392B}
+
+% ----- Titres en bleu -----
+\titleformat{\section}{\normalfont\large\bfseries\color{forceblue}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries\color{forceblue}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{}{0em}{}
+
+% ----- En-tete / pied de page -----
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headheight}{30pt}
+\lhead{\raisebox{-0.3\height}{\IfFileExists{images/logo_forcen.png}{\includegraphics[height=0.85cm]{images/logo_forcen.png}}{\footnotesize\color{forceblue}FORCE N}}}
+\rhead{\small\color{forceblue} Défense DHCP Starvation (Packet Tracer), Mentorat Cybersécurité}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ----- Style des encadres de commandes -----
+\lstdefinestyle{cmd}{
+  basicstyle=\ttfamily\small,
+  frame=single,
+  rulecolor=\color{black!55},
+  backgroundcolor=\color{boxbg},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=4pt,
+  framexleftmargin=4pt,
+  showstringspaces=false,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {ç}{{\c c}}1 {É}{{\'E}}1
+}
+\lstset{style=cmd}
+
+% ----- Macro d'insertion de capture (placeholder si le fichier manque) -----
+\newcommand{\capture}[2]{%
+  \begin{center}
+  \IfFileExists{#1}{\includegraphics[width=0.88\linewidth]{#1}}{%
+    \setlength{\fboxsep}{10pt}%
+    \fbox{\parbox[c][3.2cm][c]{0.85\linewidth}{\centering\itshape%
+      [ Capture à insérer ]\\ \texttt{\detokenize{#1}}}}}\\[3pt]
+  {\small\itshape #2}
+  \end{center}}
+
+% ----- Encadre d'avertissement -----
+\newtcolorbox{avertissement}{colback=warnred!6,colframe=warnred,boxrule=0.8pt,arc=2pt,
+  fonttitle=\bfseries,title=Avertissement légal et éthique}
+
+% ----- Bloc signature (auteur + empreinte GPG) -----
+\input{signature.tex}
+
+\begin{document}
+
+% ================================================================
+%                        PAGE DE TITRE
+% ================================================================
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+
+\IfFileExists{images/logo_forcen.png}{\includegraphics[width=7cm]{images/logo_forcen.png}}{\fbox{\parbox[c][3cm][c]{7cm}{\centering\itshape [ logo\_forcen.png ]}}}\par
+\vspace{1.2cm}
+
+{\Large\bfseries\color{forceblue} Mentorat CYBERSÉCURITÉ CYB6 / Groupe 3\par}
+\vspace{0.4cm}
+{\large Encadrant : M. Ibrahima Samba DIOP\par}
+{\small Consultant en Cybersécurité\par}
+\vspace{2.2cm}
+
+\rule{\linewidth}{0.5pt}\\[0.4cm]
+{\huge\bfseries Rapport de Lab\par}
+\vspace{0.4cm}
+{\LARGE Défense contre la DHCP Starvation\\ DHCP Snooping et Port-Security\par}
+\vspace{0.3cm}
+{\large (démonstration sous Cisco Packet Tracer)\par}
+\rule{\linewidth}{0.5pt}\\[1.5cm]
+
+\begin{tabular}{rl}
+\textbf{Étudiant(e) :} & HAMADY CISSE \\[0.5cm]
+\textbf{Date :} & \today \\[0.5cm]
+\textbf{Environnement :} & Cisco Packet Tracer, réseau \texttt{192.168.6.0/24} \\
+\end{tabular}
+
+\vfill
+{\small Document réalisé dans un cadre strictement pédagogique et sur une maquette simulée isolée.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ================================================================
+\section{Introduction}
+% ================================================================
+Les deux premiers rapports de ce lab ont mené l'attaque \textbf{DHCP Starvation} jusqu'à son
+terme : épuisement du pool sur un serveur VyOS/Kea (version VirtualBox), puis sur un véritable
+routeur Cisco (version GNS3). Les deux concluaient sur la même parade : il faut durcir la
+\textbf{couche d'accès}, c'est-à-dire le switch, avec le \textbf{DHCP snooping} et la
+\textbf{port-security}. Ce troisième volet passe de la théorie à la pratique et \textbf{montre}
+cette défense en action.
+
+Les outils d'attaque (yersinia, Scapy) ne tournent pas dans Packet Tracer. On ne rejoue donc
+pas le flood ici. En revanche, Packet Tracer simule des switches Cisco complets, ce qui permet
+de configurer les contre-mesures et de reproduire le mécanisme décisif de l'attaque :
+l'\textbf{usurpation d'adresse MAC}. L'objectif est de prouver, captures à l'appui, qu'une MAC
+usurpée est bloquée net par le switch.
+
+\begin{avertissement}
+Toutes les manipulations décrites ont été réalisées sur une \textbf{maquette simulée} sous
+Cisco Packet Tracer, sans aucun lien avec un réseau réel ni avec Internet. Les techniques de
+durcissement présentées ici sont défensives. L'usurpation de MAC n'est montrée que pour
+valider la contre-mesure, sur du matériel simulé appartenant au contexte pédagogique.
+N'appliquez jamais ce type de test sur un réseau sans autorisation écrite du propriétaire.
+\end{avertissement}
+
+\subsection{Objectifs}
+\begin{itemize}[leftmargin=1.4em]
+  \item Monter sous Packet Tracer une maquette représentative : un routeur serveur DHCP, un
+        switch d'accès administrable, un poste légitime et un poste attaquant.
+  \item Vérifier le fonctionnement normal du DHCP (les postes reçoivent une adresse).
+  \item Configurer les contre-mesures sur le switch : \textbf{DHCP snooping} (port de confiance
+        et limite de débit) et \textbf{port-security} (une seule MAC par port, coupure en cas de
+        violation).
+  \item Simuler l'usurpation de MAC, cœur de la DHCP Starvation, et prouver que le port
+        bascule en \texttt{err-disabled}, ce qui neutralise l'attaque.
+\end{itemize}
+
+% ================================================================
+\section{Environnement du laboratoire}
+% ================================================================
+La maquette est volontairement minimale, mais contient l'élément qui manquait aux deux
+montages précédents : un \textbf{switch administrable} (Cisco 2960), seul équipement capable de
+porter le DHCP snooping et la port-security. Le serveur DHCP est un routeur Cisco 1941, et deux
+PC jouent le client légitime et l'attaquant.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{>{\bfseries}l l l l}
+\toprule
+Équipement & Rôle & Adresse IP & Raccordement \\
+\midrule
+R1 (Cisco 1941)   & Serveur DHCP / passerelle & \texttt{192.168.6.1}          & \texttt{Gig0/0} $\rightarrow$ switch \texttt{Fa0/1} \\
+Switch0 (2960)    & Switch d'accès (défense)  & \texttt{---}                 & port \texttt{Fa0/1} de confiance \\
+PC0               & Client légitime           & \texttt{192.168.6.2} (DHCP)  & \texttt{Fa0/2} \\
+PC1               & Attaquant                 & \texttt{192.168.6.3} (DHCP)  & \texttt{Fa0/3} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\capture{images/00_topologie.png}{Maquette Packet Tracer : \texttt{R1 (1941)} $\rightarrow$ \texttt{Switch0 (2960)} $\rightarrow$ \texttt{PC0} (légitime) et \texttt{PC1} (attaquant). Tous les liens sont actifs (verts) : c'est l'état sain, avant toute attaque.}
+
+\noindent Le choix des ports n'est pas anodin. \texttt{Fa0/1} relie le switch au \textbf{vrai}
+serveur DHCP : ce sera le port \emph{de confiance}. \texttt{Fa0/2} et \texttt{Fa0/3} relient des
+postes utilisateurs : ce sont des ports \emph{non approuvés}, ceux par lesquels une attaque
+arriverait.
+
+% ================================================================
+\section{Tâche 1 : Maquette et serveur DHCP fonctionnel (état de référence)}
+% ================================================================
+Avant de défendre quoi que ce soit, il faut un réseau qui marche. On configure le routeur en
+serveur DHCP et on vérifie que les deux postes reçoivent bien une adresse. C'est la photo
+« avant » à laquelle on comparera le comportement sous défense.
+
+\subsection{Rappels théoriques}
+Le DHCP distribue automatiquement les adresses IP via l'échange \textbf{DORA} (DISCOVER, OFFER,
+REQUEST, ACK). Le serveur identifie chaque client par son \textbf{adresse MAC} et lui réserve
+une adresse du pool. C'est précisément cette association « une MAC = une adresse » que l'attaque
+DHCP Starvation détourne, en inondant le serveur de MAC falsifiées jusqu'à vider le pool.
+
+\subsection{Manipulations}
+\textbf{1. Configurer le routeur R1 en serveur DHCP :}
+\begin{lstlisting}
+enable
+configure terminal
+ hostname R1
+ interface GigabitEthernet0/0
+  ip address 192.168.6.1 255.255.255.0
+  no shutdown
+ exit
+ ip dhcp excluded-address 192.168.6.1
+ ip dhcp pool L3SIMAC
+  network 192.168.6.0 255.255.255.0
+  default-router 192.168.6.1
+ exit
+end
+write memory
+\end{lstlisting}
+\capture{images/01_r1_config.png}{Configuration de R1 : \texttt{GigabitEthernet0/0} en \texttt{192.168.6.1}, pool \texttt{L3SIMAC}, passerelle exclue du pool. \texttt{show ip interface brief} confirme l'interface \texttt{up/up}.}
+
+\textbf{2. Mettre les deux PC en DHCP et vérifier l'adresse obtenue :} sur chaque poste,
+\emph{Desktop $\rightarrow$ IP Configuration $\rightarrow$ DHCP}.
+\capture{images/01_pc0_dhcp.png}{PC0 (client légitime) a reçu \texttt{192.168.6.2}, masque \texttt{/24}, passerelle \texttt{192.168.6.1}. Mention \emph{DHCP request successful}.}
+\capture{images/01_pc1_dhcp.png}{PC1 (poste qui servira d'attaquant) a reçu \texttt{192.168.6.3} du même serveur. Le DHCP fonctionne normalement pour les deux postes.}
+
+\textbf{3. Confirmer les baux côté serveur :}
+\begin{lstlisting}
+show ip dhcp binding
+\end{lstlisting}
+\capture{images/01_binding.png}{Table des baux de R1 : \texttt{192.168.6.2} et \texttt{192.168.6.3}, de type \emph{Automatic}, associées aux MAC réelles des deux PC. État de référence établi.}
+
+\subsection{Questions de la tâche 1}
+\textbf{Q1. Pourquoi le serveur attribue-t-il une adresse différente à chaque PC ?}
+
+\textit{Réponse :} Parce qu'il distingue les clients par leur adresse MAC. Chaque PC présente
+une MAC unique, le serveur lui réserve donc une entrée distincte dans sa table. C'est le
+comportement normal, mais c'est aussi la faille exploitée par la starvation : si un attaquant
+présente des centaines de fausses MAC, le serveur croit voir des centaines de clients et
+épuise son pool.
+
+% ================================================================
+\section{Tâche 2 : Mise en place des contre-mesures sur le switch}
+% ================================================================
+On arme maintenant le switch. Deux mécanismes se complètent : le DHCP snooping encadre le
+trafic DHCP, la port-security limite le nombre d'adresses MAC par port.
+
+\subsection{Rappels théoriques}
+\textbf{DHCP snooping.} Le switch classe ses ports en \emph{trust} et \emph{untrusted}. Seul un
+port de confiance (celui qui mène au vrai serveur) a le droit d'émettre des réponses DHCP
+(OFFER, ACK). Cela bloque d'emblée les faux serveurs DHCP. Sur les ports non approuvés, on
+ajoute une \textbf{limite de débit} DHCP : un flux anormal de requêtes y est étranglé.
+
+\textbf{Port-security.} Le switch mémorise les adresses MAC vues sur chaque port d'accès et
+limite leur nombre. Avec un maximum de \textbf{1 MAC} et une action \textbf{shutdown}, dès
+qu'une deuxième MAC apparaît sur le port, celui-ci est coupé (\texttt{err-disabled}). C'est la
+réponse directe à l'usurpation de MAC : l'attaque change de MAC à chaque paquet, la
+port-security la stoppe au deuxième.
+
+\subsection{Manipulations}
+\textbf{1. Activer le DHCP snooping et désigner le port de confiance :}
+\begin{lstlisting}
+enable
+configure terminal
+ ip dhcp snooping
+ ip dhcp snooping vlan 1
+ no ip dhcp snooping information option
+ interface FastEthernet0/1
+  ip dhcp snooping trust
+ exit
+ interface range FastEthernet0/2 - 3
+  ip dhcp snooping limit rate 10
+ exit
+\end{lstlisting}
+
+\textbf{2. Activer la port-security sur les ports clients :}
+\begin{lstlisting}
+ interface range FastEthernet0/2 - 3
+  switchport mode access
+  switchport port-security
+  switchport port-security maximum 1
+  switchport port-security violation shutdown
+  switchport port-security mac-address sticky
+ exit
+end
+write memory
+\end{lstlisting}
+\capture{images/02_defense_config.png}{Configuration de la défense sur Switch0 : DHCP snooping (VLAN 1, \texttt{Fa0/1} en \emph{trust}, limite de débit sur les ports clients) puis port-security (max 1 MAC, violation \emph{shutdown}, apprentissage \emph{sticky}).}
+
+\textbf{3. Vérifier que les contre-mesures sont en place :}
+\begin{lstlisting}
+show ip dhcp snooping
+show port-security
+show port-security interface fastEthernet0/3
+\end{lstlisting}
+\capture{images/02_defense_verif.png}{Vérifications : le DHCP snooping est actif sur le VLAN 1, \texttt{Fa0/1} est \emph{Trusted = yes} (le routeur), \texttt{Fa0/2} et \texttt{Fa0/3} sont non approuvés avec une limite de \texttt{10 pps}. La port-security affiche \emph{Maximum = 1} et l'action \emph{Shutdown} sur les ports clients.}
+
+\subsection{Questions de la tâche 2}
+\textbf{Q1. Pourquoi seul le port \texttt{Fa0/1} est-il déclaré \emph{trust} ?}
+
+\textit{Réponse :} Parce que c'est le seul port derrière lequel se trouve un serveur DHCP
+légitime (le routeur R1). Un port de confiance est autorisé à transmettre les réponses DHCP. Si
+on laissait les ports clients en confiance, n'importe quel poste pourrait se faire passer pour
+un serveur DHCP et distribuer de fausses passerelles. En gardant \texttt{Fa0/2} et \texttt{Fa0/3}
+non approuvés, toute réponse DHCP venant d'un poste est ignorée, et le débit de requêtes y est
+plafonné.
+
+\medskip\noindent\textbf{Q2. En quoi \texttt{maximum 1} contre-t-il directement la starvation ?}
+
+\textit{Réponse :} La starvation repose sur l'envoi de nombreuses requêtes avec une MAC source
+différente à chaque fois. Avec un maximum d'une seule MAC autorisée par port, la première MAC
+est apprise, et la deuxième MAC falsifiée déclenche aussitôt la violation. Le port se coupe
+avant que le flood n'ait pu vider le pool. La valeur \emph{sticky} fait que la MAC légitime est
+mémorisée automatiquement, sans avoir à la saisir à la main.
+
+% ================================================================
+\section{Tâche 3 : Validation de la défense (usurpation de MAC neutralisée)}
+% ================================================================
+Place à la preuve. On simule le geste central de l'attaque, l'usurpation de MAC, et on observe
+la réaction du switch.
+
+\subsection{Manipulations}
+\textbf{1. Trafic normal avec la MAC légitime :} depuis PC1, on envoie d'abord un \texttt{ping}
+vers la passerelle. Sa vraie MAC est ainsi apprise comme l'unique MAC autorisée du port.
+\begin{lstlisting}
+ping 192.168.6.1
+\end{lstlisting}
+\capture{images/03_ping_ok.png}{PC1 avec sa MAC d'origine : le \texttt{ping} vers \texttt{192.168.6.1} répond (4 sur 4). Le port \texttt{Fa0/3} a mémorisé cette MAC comme adresse sécurisée \emph{sticky}.}
+
+\textbf{2. Usurper une adresse MAC :} dans l'onglet \emph{Config} de PC1, interface
+\texttt{FastEthernet0}, on remplace la MAC par une valeur falsifiée (\texttt{00AA.BBCC.DDEE}).
+C'est exactement ce que fait un outil de starvation à chaque paquet.
+\capture{images/03_config_mac.png}{Onglet \emph{Config} de PC1 : le champ \emph{MAC Address} permet de falsifier l'adresse matérielle du poste (ici la MAC d'origine \texttt{00E0.B021.E446}, avant usurpation).}
+
+\textbf{3. Renvoyer du trafic avec la MAC usurpée :}
+\begin{lstlisting}
+ping 192.168.6.1
+\end{lstlisting}
+\capture{images/03_ping_ko.png}{Après usurpation, le même \texttt{ping} échoue (100 \% de perte). Le poste attaquant est coupé du réseau.}
+
+\capture{images/03_topologie_bloquee.png}{Vue de la maquette : le lien entre \texttt{PC1} et \texttt{Switch0} est passé au \textbf{rouge}. Le port a été désactivé, les autres liens restent actifs.}
+
+\capture{images/03_violation_log.png}{Journaux du switch au moment de l'attaque : \texttt{\%PM-4-ERR\_DISABLE: psecure-violation ... putting Fa0/3 in err-disable state} et \texttt{\%PORT\_SECURITY-2-PSECURE\_VIOLATION: ... caused by MAC address 00AA.BBCC.DDEE on port Fa0/3}. La MAC usurpée est nommée explicitement.}
+
+\textbf{4. Constater l'état verrouillé du port :}
+\begin{lstlisting}
+show port-security interface fastEthernet0/3
+show interfaces fastEthernet0/3 status
+show port-security
+\end{lstlisting}
+\capture{images/03_portsec_violation.png}{Preuve chiffrée : \texttt{Port Status = Secure-shutdown}, \texttt{Last Source Address = 00AA.BBCC.DDEE}, \texttt{Security Violation Count = 1}. Le port \texttt{Fa0/3} est en \texttt{err-disabled}. L'usurpation de MAC a été détectée et bloquée.}
+
+\subsection{Questions de la tâche 3}
+\textbf{Q1. Que se serait-il passé sans la port-security ?}
+
+\textit{Réponse :} Rien n'aurait arrêté la MAC falsifiée. Le switch l'aurait relayée vers le
+routeur, qui aurait réservé une nouvelle adresse pour cette fausse identité. Répété des
+centaines de fois, ce geste vide le pool : c'est la starvation observée dans les deux rapports
+précédents. La port-security casse la chaîne dès la deuxième MAC.
+
+\medskip\noindent\textbf{Q2. Le port est en \texttt{err-disabled}. Comment le remettre en service
+après l'incident ?}
+
+\textit{Réponse :} Un port en \texttt{err-disabled} ne se réactive pas tout seul (sauf si on a
+configuré un \emph{errdisable recovery}). L'administrateur doit traiter la cause, puis relancer
+le port à la main :
+\begin{lstlisting}
+interface fastEthernet0/3
+ shutdown
+ no shutdown
+\end{lstlisting}
+Cette intervention manuelle est voulue : elle force un humain à constater qu'une attaque a eu
+lieu avant de rouvrir l'accès.
+
+% ================================================================
+\section{Réflexion globale et conclusion}
+% ================================================================
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Deux défenses complémentaires.} Le DHCP snooping agit sur le \emph{trafic DHCP}
+        (qui a le droit de répondre, à quel débit) ; la port-security agit sur les \emph{adresses
+        MAC} (combien par port). Prises ensemble, elles couvrent à la fois le faux serveur DHCP
+        et l'épuisement de pool par usurpation.
+
+  \item \textbf{La port-security est la parade décisive contre la starvation.} L'attaque vit de
+        l'usurpation de MAC ; limiter le nombre de MAC par port la tue à la source. La
+        démonstration le montre sans ambiguïté : une seule MAC falsifiée suffit à faire tomber
+        le port en \texttt{err-disabled}.
+
+  \item \textbf{Limite de l'exercice.} Packet Tracer ne lance pas de vrai flood. On n'a donc pas
+        rejoué l'attaque complète ici, mais reproduit son mécanisme central (l'usurpation de MAC)
+        et prouvé qu'il est bloqué. Les deux rapports précédents couvrent, eux, l'attaque réelle
+        jusqu'à l'épuisement du pool.
+\end{enumerate}
+
+\medskip
+\noindent\textbf{Conclusion.} Ce troisième volet referme le lab en passant du côté défense. Le
+même réseau qui distribuait tranquillement ses adresses se transforme, une fois le switch
+durci, en piège pour l'attaquant : la MAC usurpée est repérée et le port se verrouille
+instantanément. La leçon des trois rapports converge : le DHCP n'authentifie pas ses clients,
+c'est donc au switch d'accès de poser la limite, par le DHCP snooping et la port-security.
+
+\signatureHamady
+
+% ================================================================
+\section{Annexe : commandes utilisées, rôles et options}
+% ================================================================
+
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{@{}p{7.2cm} p{7.6cm}@{}}
+\toprule
+\textbf{Commande} & \textbf{Rôle et options} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Commande} & \textbf{Rôle et options} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{2}{r}{\footnotesize\itshape suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Serveur DHCP (routeur Cisco IOS)}} \\*
+\midrule
+\lstinline!enable! & Passe en mode privilégié (EXEC). \\
+\lstinline!configure terminal! & Entre en configuration globale. \\
+\lstinline!interface GigabitEthernet0/0! & Sélectionne l'interface du serveur. \\
+\lstinline!ip address 192.168.6.1 255.255.255.0! & Affecte l'IP et le masque /24 (la passerelle). \\
+\lstinline!no shutdown! & Active l'interface. \\
+\lstinline!ip dhcp excluded-address 192.168.6.1! & Retire la passerelle du pool distribuable. \\
+\lstinline!ip dhcp pool L3SIMAC! & Crée le pool DHCP \texttt{L3SIMAC}. \\
+\lstinline!network 192.168.6.0 255.255.255.0! & Plage distribuable du pool. \\
+\lstinline!default-router 192.168.6.1! & Passerelle annoncée aux clients. \\
+\lstinline!show ip dhcp binding! & Liste les baux attribués (état de référence). \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}DHCP snooping (switch)}} \\*
+\midrule
+\lstinline!ip dhcp snooping! & Active globalement le DHCP snooping. \\
+\lstinline!ip dhcp snooping vlan 1! & L'applique au VLAN 1 (celui des postes). \\
+\lstinline!no ip dhcp snooping information option! & Désactive l'option 82 (inutile sans relais DHCP). \\
+\lstinline!ip dhcp snooping trust! & Déclare le port de confiance (celui du vrai serveur). \\
+\lstinline!ip dhcp snooping limit rate 10! & Plafonne le trafic DHCP à 10 paquets/s sur un port client. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Port-security (switch)}} \\*
+\midrule
+\lstinline!switchport mode access! & Force le port en mode accès (préalable à la port-security). \\
+\lstinline!switchport port-security! & Active la port-security sur le port. \\
+\lstinline!switchport port-security maximum 1! & Autorise une seule MAC sur le port. \\
+\lstinline!switchport port-security violation shutdown! & Coupe le port (\texttt{err-disabled}) en cas de violation. \\
+\lstinline!switchport port-security mac-address sticky! & Apprend et mémorise la MAC légitime automatiquement. \\
+\lstinline!show port-security! & Vue d'ensemble : MAC max, violations, action par port. \\
+\lstinline!show port-security interface fastEthernet0/3! & Détail d'un port : état, MAC source, compteur de violations. \\
+\lstinline!show interfaces fastEthernet0/3 status! & Affiche l'état du port (\texttt{err-disabled} après violation). \\
+\lstinline!shutdown! / \lstinline!no shutdown! & Réactive manuellement un port tombé en \texttt{err-disabled}. \\
+
+\end{longtable}
+
+\end{document}
